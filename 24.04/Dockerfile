@@ -11,11 +11,11 @@ USER root
 
 # Install a few dependencies for goCommands, text editing, and monitoring instances
 RUN apt update && \
-    apt install -y lsb-release apt-transport-https curl libfreetype6-dev pkg-config libx11-dev gcc less software-properties-common apt-utils glances htop nano 
+    apt install -y lsb-release apt-transport-https curl libfreetype6-dev pkg-config libx11-dev gcc less software-properties-common apt-utils glances htop nano
 
 # Install Go
 RUN wget -q -c https://dl.google.com/go/go1.25.0.linux-amd64.tar.gz -O - | tar -xz -C /usr/local
-ENV PATH=$PATH:/usr/local/go/bin 
+ENV PATH=$PATH:/usr/local/go/bin
 
 # Install GoCommands
 RUN cd /usr/local/bin/ && \
@@ -27,14 +27,14 @@ RUN apt update && \
     apt install -y sudo && \
     apt clean && \
     rm -rf /var/lib/apt/lists/*
-    
+
 ARG LOCAL_USER=kasm-user
 
 # all sudo powers
 ARG PRIV_CMDS='ALL'
 # uncomment to limited sudo powers
 # ARG PRIV_CMDS='/bin/ch*,/bin/cat,/bin/gunzip,/bin/tar,/bin/mkdir,/bin/ps,/bin/mv,/bin/cp,/usr/bin/apt*,/usr/bin/pip*,/bin/yum,/bin/snap,/bin/curl,/bin/tee,/opt'
-    
+
 RUN usermod -aG sudo kasm-user && \
     echo "$LOCAL_USER ALL=NOPASSWD: $PRIV_CMDS" >> /etc/sudoers
 
