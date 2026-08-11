@@ -160,8 +160,20 @@ COPY vnc_startup.sh /dockerstartup/vnc_startup.sh
 COPY dri-node-setup.sh /dockerstartup/dri-node-setup.sh
 RUN chmod +x /dockerstartup/vnc_startup.sh /dockerstartup/dri-node-setup.sh
 
-# Remove pyenv references from .bashrc to prevent startup errors
-RUN sed -i '/pyenv/d' /home/kasm-user/.bashrc || true
+# Remove pyenv references from every shell startup file to prevent startup errors.
+# The nvidia-pytorch base wires pyenv into the system-wide init, not just the
+# user's .bashrc, and pyenv itself is unreachable as kasm-user -- so each new
+# interactive shell printed "pyenv: command not found" once per init hook.
+# Python here is managed by conda, so the hooks are pure noise. bash -n guards
+# against a deletion landing inside an if/fi block and leaving a file unparseable.
+RUN for f in /etc/bash.bashrc /etc/profile /etc/profile.d/*.sh \
+             /home/kasm-user/.bashrc /home/kasm-user/.bash_profile \
+             /home/kasm-user/.profile; do \
+        [ -f "$f" ] || continue; \
+        grep -q pyenv "$f" || continue; \
+        sed -i '/pyenv/d' "$f"; \
+        bash -n "$f" || echo "WARNING: $f does not parse after pyenv removal"; \
+    done
 
 # Create cache directory for conda with proper ownership
 RUN mkdir -p /home/kasm-user/.cache && chown -R kasm-user:kasm-user /home/kasm-user/.cache
