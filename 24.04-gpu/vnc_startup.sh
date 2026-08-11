@@ -37,8 +37,20 @@ BUILD_ARCH=$(uname -p)
 if [ -z ${KASM_PROFILE_CHUNK_SIZE} ]; then
   KASM_PROFILE_CHUNK_SIZE=100000
 fi
+# Resolve the DRM node this container was actually allocated. On a multi-GPU
+# host the NVIDIA device plugin injects only the nodes belonging to the GPU it
+# handed us (e.g. card4/renderD131), but Xvnc hardcodes card0/renderD128 and
+# treats a missing node as fatal ("Failed to create gbm"). dri-node-setup.sh
+# symlinks the defaults onto the allocated node and echoes that node back here.
+# Run out-of-process and swallow failures: a GPU quirk must not abort startup.
+KASM_DRI_RENDER_NODE=""
+if [ -x /dockerstartup/dri-node-setup.sh ]; then
+  KASM_DRI_RENDER_NODE=$(/dockerstartup/dri-node-setup.sh) || \
+    echo "dri-node-setup.sh failed; falling back to defaults" >&2
+fi
+
 if [ -z ${DRINODE+x} ]; then
-  DRINODE="/dev/dri/renderD128"
+  DRINODE="${KASM_DRI_RENDER_NODE:-/dev/dri/renderD128}"
 fi
 KASMNVC_HW3D=''
 if [ ! -z ${HW3D+x} ]; then

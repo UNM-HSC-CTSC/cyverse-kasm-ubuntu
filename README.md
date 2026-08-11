@@ -47,6 +47,11 @@ Access the desktop at: http://localhost:6901
 docker run -it --rm --gpus all -p 6901:6901 harbor.cyverse.org/vice/kasm/ubuntu:24.04-gpu
 ```
 
+On a multi-GPU host you can pin a single card, e.g. `--gpus '"device=4"'`. The 24.04-gpu
+image resolves whichever DRM node it was given at startup, so it no longer requires the
+allocated GPU to be `card0`. See [`24.04-gpu/dri-node-setup.sh`](24.04-gpu/dri-node-setup.sh)
+if the desktop fails with `(EE) Failed to create gbm`.
+
 ## Available Images
 
 ### Base Ubuntu Desktops

@@ -145,7 +145,11 @@ RUN usermod -aG sudo ${LOCAL_USER} && \
 # Copy KASM VNC configuration and startup scripts
 COPY kasmvnc_defaults.yaml /usr/share/kasmvnc/kasmvnc_defaults.yaml
 COPY vnc_startup.sh /dockerstartup/vnc_startup.sh
-RUN chmod +x /dockerstartup/vnc_startup.sh
+# Points Xvnc at the GPU the NVIDIA device plugin actually allocated; without it
+# the desktop dies with "Failed to create gbm" whenever it lands on a GPU other
+# than card0. Invoked from vnc_startup.sh.
+COPY dri-node-setup.sh /dockerstartup/dri-node-setup.sh
+RUN chmod +x /dockerstartup/vnc_startup.sh /dockerstartup/dri-node-setup.sh
 
 # Remove pyenv references from .bashrc to prevent startup errors
 RUN sed -i '/pyenv/d' /home/kasm-user/.bashrc || true
