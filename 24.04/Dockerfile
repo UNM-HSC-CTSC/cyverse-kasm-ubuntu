@@ -60,6 +60,9 @@ COPY vnc_startup.sh /dockerstartup/vnc_startup.sh
 
 RUN chmod +x /dockerstartup/vnc_startup.sh
 
+# Create cache directory for conda with proper ownership
+RUN mkdir -p /home/kasm-user/.cache && chown -R kasm-user:kasm-user /home/kasm-user/.cache
+
 USER kasm-user
 
 # Install AI tools (Claude Code, Gemini CLI, OpenAI Codex)
@@ -71,5 +74,21 @@ RUN npm config set prefix /home/kasm-user/.npm-global && \
 RUN curl -fsSL https://opencode.ai/install | bash -s -- --no-modify-path
 
 ENV PATH="/home/kasm-user/.npm-global/bin:/home/kasm-user/.opencode/bin:${PATH}"
+
+# =============================================================================
+# Miniconda and Mamba Installation
+# =============================================================================
+# Install Miniconda package manager and mamba for faster dependency resolution
+RUN curl -fsSL -o /tmp/Miniconda3-latest-Linux-x86_64.sh \
+    https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh \
+    && bash /tmp/Miniconda3-latest-Linux-x86_64.sh -b -p /home/kasm-user/miniconda3 \
+    && rm /tmp/Miniconda3-latest-Linux-x86_64.sh \
+    && /home/kasm-user/miniconda3/bin/conda init bash
+
+ENV PATH="/home/kasm-user/miniconda3/bin:${PATH}"
+
+# Install mamba using conda (use classic solver with no-plugins flag)
+RUN /home/kasm-user/miniconda3/bin/conda --no-plugins install -y --solver=classic -c conda-forge mamba && \
+    /home/kasm-user/miniconda3/bin/conda clean -afy
 
 ENTRYPOINT [ "/dockerstartup/vnc_startup.sh" ]
