@@ -1,4 +1,4 @@
-FROM kasmweb/ubuntu-noble-desktop:1.17.0-rolling-daily
+FROM kasmweb/ubuntu-noble-desktop:1.18.0-rolling-daily
 
 # create ~/data-store for CSI driver fuse mount
 WORKDIR /home/kasm-user/data-store
@@ -10,8 +10,9 @@ RUN echo '{"irods_host": "data.cyverse.org", "irods_port": 1247, "irods_user_nam
 USER root
 
 # Install a few dependencies for goCommands, text editing, and monitoring instances
+# wget is used below to fetch Go; bubblewrap/socat/s3fs/locales back the AI CLI tools
 RUN apt update && \
-    apt install -y lsb-release apt-transport-https curl libfreetype6-dev pkg-config libx11-dev gcc less software-properties-common apt-utils glances htop nano
+    apt install -y lsb-release apt-transport-https curl wget libfreetype6-dev pkg-config libx11-dev gcc less software-properties-common apt-utils glances htop nano locales s3fs socat bubblewrap
 
 # Install Go
 RUN wget -q -c https://dl.google.com/go/go1.25.0.linux-amd64.tar.gz -O - | tar -xz -C /usr/local
