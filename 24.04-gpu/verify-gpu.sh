@@ -18,7 +18,13 @@ ls -la /dev/dri/ 2>/dev/null || echo "No /dev/dri devices found"
 echo -e "\n--- Environment Variables ---"
 echo "NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-not set}"
 echo "NVIDIA_DRIVER_CAPABILITIES: ${NVIDIA_DRIVER_CAPABILITIES:-not set}"
-echo "VGL_DISPLAY: ${VGL_DISPLAY:-not set}"
+# VGL_DISPLAY and the __*_VENDOR_* vars are expected to be "not set" here: they
+# are scoped to vglrun-wrapper.sh. Seeing them set means the running image
+# predates that change. LIBGL_ALWAYS_SOFTWARE=1 is the positive signal that
+# vnc_startup.sh pinned the session to llvmpipe.
+echo "VGL_DISPLAY: ${VGL_DISPLAY:-not set (expected)}"
+echo "__EGL_VENDOR_LIBRARY_FILENAMES: ${__EGL_VENDOR_LIBRARY_FILENAMES:-not set (expected)}"
+echo "LIBGL_ALWAYS_SOFTWARE: ${LIBGL_ALWAYS_SOFTWARE:-not set}"
 echo "KASM_EGL_CARD: ${KASM_EGL_CARD:-not set}"
 echo "KASM_RENDERD: ${KASM_RENDERD:-not set}"
 
