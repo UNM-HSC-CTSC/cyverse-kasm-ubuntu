@@ -378,6 +378,27 @@ chmod 600 $PASSWD_PATH
 
 # start processes
 start_kasmvnc
+
+# GUI apps on this desktop can only render through Mesa's software rasteriser.
+# Xvnc is not an NVIDIA X server, and Mesa has no userspace driver for the
+# nvidia-drm kernel driver behind the DRM nodes the device plugin injects. Left
+# to probe, every GL client walks the hardware path first and fails --
+#
+#   pci id for fd 23: 10de:2bb5, driver (null)
+#   glx: failed to create dri3 screen
+#   failed to load driver: nvidia-drm
+#
+# -- before falling back to swrast. GTK4 and Electron apps do not all recover
+# from that cleanly, which is what broke Chrome, VS Code and gnome-system-monitor
+# here; the non-GPU image never hits it because it has no /dev/dri for DRI3 to
+# offer. Telling Mesa up front skips the doomed probe entirely.
+#
+# Exported *after* start_kasmvnc so Xvnc's own GBM initialisation on the
+# allocated NVIDIA node is unaffected, and inherited by the window manager and
+# everything launched from the desktop. vglrun-wrapper.sh unsets it for apps
+# that genuinely want the GPU.
+export LIBGL_ALWAYS_SOFTWARE=1
+
 start_window_manager
 start_audio_out_websocket
 start_audio_out
