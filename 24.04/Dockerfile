@@ -1,4 +1,4 @@
-FROM kasmweb/ubuntu-noble-desktop:1.17.0-rolling-daily
+FROM kasmweb/ubuntu-noble-desktop:1.18.0-rolling-daily
 
 # create ~/data-store for CSI driver fuse mount
 WORKDIR /home/kasm-user/data-store
@@ -10,8 +10,9 @@ RUN echo '{"irods_host": "data.cyverse.org", "irods_port": 1247, "irods_user_nam
 USER root
 
 # Install a few dependencies for goCommands, text editing, and monitoring instances
+# wget is used below to fetch Go; bubblewrap/socat/s3fs/locales back the AI CLI tools
 RUN apt update && \
-    apt install -y lsb-release apt-transport-https curl libfreetype6-dev pkg-config libx11-dev gcc less software-properties-common apt-utils glances htop nano
+    apt install -y lsb-release apt-transport-https curl wget libfreetype6-dev pkg-config libx11-dev gcc less software-properties-common apt-utils glances htop nano locales s3fs socat bubblewrap
 
 # Install Go
 RUN wget -q -c https://dl.google.com/go/go1.25.0.linux-amd64.tar.gz -O - | tar -xz -C /usr/local
@@ -60,6 +61,9 @@ COPY vnc_startup.sh /dockerstartup/vnc_startup.sh
 
 RUN chmod +x /dockerstartup/vnc_startup.sh
 
+# Create cache directory for conda with proper ownership
+RUN mkdir -p /home/kasm-user/.cache && chown -R kasm-user:kasm-user /home/kasm-user/.cache
+
 USER kasm-user
 
 # Install AI tools (Claude Code, Gemini CLI, OpenAI Codex)
@@ -71,5 +75,21 @@ RUN npm config set prefix /home/kasm-user/.npm-global && \
 RUN curl -fsSL https://opencode.ai/install | bash -s -- --no-modify-path
 
 ENV PATH="/home/kasm-user/.npm-global/bin:/home/kasm-user/.opencode/bin:${PATH}"
+
+# =============================================================================
+# Miniconda and Mamba Installation
+# =============================================================================
+# Install Miniconda package manager and mamba for faster dependency resolution
+RUN curl -fsSL -o /tmp/Miniconda3-latest-Linux-x86_64.sh \
+    https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh \
+    && bash /tmp/Miniconda3-latest-Linux-x86_64.sh -b -p /home/kasm-user/miniconda3 \
+    && rm /tmp/Miniconda3-latest-Linux-x86_64.sh \
+    && /home/kasm-user/miniconda3/bin/conda init bash
+
+ENV PATH="/home/kasm-user/miniconda3/bin:${PATH}"
+
+# Install mamba using conda (use classic solver with no-plugins flag)
+RUN /home/kasm-user/miniconda3/bin/conda --no-plugins install -y --solver=classic -c conda-forge mamba && \
+    /home/kasm-user/miniconda3/bin/conda clean -afy
 
 ENTRYPOINT [ "/dockerstartup/vnc_startup.sh" ]

@@ -85,6 +85,15 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     rm -rf /var/lib/apt/lists/*
 
 # =============================================================================
+# GitHub CLI Installation
+# =============================================================================
+RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg && \
+    chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null && \
+    apt-get update && apt-get install -y gh && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# =============================================================================
 # NVIDIA EGL Configuration
 # =============================================================================
 # Configure libglvnd to route EGL calls to NVIDIA libraries
@@ -151,8 +160,20 @@ COPY vnc_startup.sh /dockerstartup/vnc_startup.sh
 COPY dri-node-setup.sh /dockerstartup/dri-node-setup.sh
 RUN chmod +x /dockerstartup/vnc_startup.sh /dockerstartup/dri-node-setup.sh
 
-# Remove pyenv references from .bashrc to prevent startup errors
-RUN sed -i '/pyenv/d' /home/kasm-user/.bashrc || true
+# Remove pyenv references from every shell startup file to prevent startup errors.
+# The nvidia-pytorch base wires pyenv into the system-wide init, not just the
+# user's .bashrc, and pyenv itself is unreachable as kasm-user -- so each new
+# interactive shell printed "pyenv: command not found" once per init hook.
+# Python here is managed by conda, so the hooks are pure noise. bash -n guards
+# against a deletion landing inside an if/fi block and leaving a file unparseable.
+RUN for f in /etc/bash.bashrc /etc/profile /etc/profile.d/*.sh \
+             /home/kasm-user/.bashrc /home/kasm-user/.bash_profile \
+             /home/kasm-user/.profile; do \
+        [ -f "$f" ] || continue; \
+        grep -q pyenv "$f" || continue; \
+        sed -i '/pyenv/d' "$f"; \
+        bash -n "$f" || echo "WARNING: $f does not parse after pyenv removal"; \
+    done
 
 # Create cache directory for conda with proper ownership
 RUN mkdir -p /home/kasm-user/.cache && chown -R kasm-user:kasm-user /home/kasm-user/.cache
@@ -168,9 +189,14 @@ USER kasm-user
 # Install Claude Code, OpenAI Codex, and Google Gemini CLI
 RUN npm config set prefix /home/kasm-user/.npm-global && \
     export PATH=/home/kasm-user/.npm-global/bin:$PATH && \
-    npm install -g @anthropic-ai/claude-code @google/gemini-cli @openai/codex
+    npm install -g @anthropic-ai/claude-code @google/gemini-cli @openai/codex && \
+    npm cache clean --force
 
-ENV PATH="/home/kasm-user/.npm-global/bin:${PATH}"
+# Install OpenCode (https://opencode.ai/)
+# --no-modify-path is required: the installer otherwise hangs the Docker build
+RUN curl -fsSL https://opencode.ai/install | bash -s -- --no-modify-path
+
+ENV PATH="/home/kasm-user/.npm-global/bin:/home/kasm-user/.opencode/bin:${PATH}"
 
 # =============================================================================
 # Miniconda and Mamba Installation
