@@ -205,8 +205,44 @@ RUN for f in /etc/bash.bashrc /etc/profile /etc/profile.d/*.sh \
         rm -f "$f.nopyenv"; \
     done
 
+# The strip above is a build-time edit, and the base image undoes it at runtime:
+# its /dockerstartup/custom_startup.sh chain appends the pyenv setup back into
+# ~/.bashrc on every container start, which vnc_startup.sh invokes. Racing a
+# background process is fragile, so answer the call instead of chasing the
+# caller. `eval "$(pyenv init -)"` and `eval "$(pyenv virtualenv-init -)"` -- the
+# pair responsible for the two "pyenv: command not found" lines per terminal --
+# both evaluate to nothing and succeed.
+#
+# pyenv is missing rather than broken: it lives in /home/kasm-default-profile,
+# which is only copied into $HOME by kasm_default_profile.sh, and this image
+# overrides ENTRYPOINT to skip that. If that is ever restored, the real pyenv
+# takes over here automatically.
+RUN printf '%s\n' \
+        '#!/bin/sh' \
+        '# No-op stand-in; see the Dockerfile for why. Defers to a real pyenv.' \
+        '[ -x "$HOME/.pyenv/bin/pyenv" ] && exec "$HOME/.pyenv/bin/pyenv" "$@"' \
+        'exit 0' \
+        > /usr/local/bin/pyenv && \
+    chmod +x /usr/local/bin/pyenv
+
 # Create cache directory for conda with proper ownership
 RUN mkdir -p /home/kasm-user/.cache && chown -R kasm-user:kasm-user /home/kasm-user/.cache
+
+# Stop VS Code prompting "Choose password for new keyring" on first launch.
+#
+# VS Code stores secrets through libsecret, which asks the Secret Service to
+# unlock a keyring; with gnome-keyring-daemon running in the session and no
+# keyring yet created, that surfaces as a modal password prompt before the user
+# has done anything. In an ephemeral container desktop there is nothing durable
+# to protect, and the prompt blocks the window.
+#
+# "basic" switches VS Code to its own obfuscated file store, matching what Kasm
+# already does for Chrome (--password-store=basic in its google-chrome wrapper).
+# argv.json is VS Code's documented runtime-argument file and stays editable, so
+# a user who wants the keyring can revert it.
+RUN mkdir -p /home/kasm-user/.vscode && \
+    printf '{\n  "password-store": "basic"\n}\n' > /home/kasm-user/.vscode/argv.json && \
+    chown -R kasm-user:kasm-user /home/kasm-user/.vscode
 
 # =============================================================================
 # Switch to kasm-user for User-Space Installations
