@@ -18,7 +18,13 @@ ls -la /dev/dri/ 2>/dev/null || echo "No /dev/dri devices found"
 echo -e "\n--- Environment Variables ---"
 echo "NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-not set}"
 echo "NVIDIA_DRIVER_CAPABILITIES: ${NVIDIA_DRIVER_CAPABILITIES:-not set}"
-echo "VGL_DISPLAY: ${VGL_DISPLAY:-not set}"
+# VGL_DISPLAY and the __*_VENDOR_* vars are expected to be "not set" here: they
+# are scoped to vglrun-wrapper.sh. Seeing them set means the running image
+# predates that change. LIBGL_ALWAYS_SOFTWARE=1 is the positive signal that
+# vnc_startup.sh pinned the session to llvmpipe.
+echo "VGL_DISPLAY: ${VGL_DISPLAY:-not set (expected)}"
+echo "__EGL_VENDOR_LIBRARY_FILENAMES: ${__EGL_VENDOR_LIBRARY_FILENAMES:-not set (expected)}"
+echo "LIBGL_ALWAYS_SOFTWARE: ${LIBGL_ALWAYS_SOFTWARE:-not set}"
 echo "KASM_EGL_CARD: ${KASM_EGL_CARD:-not set}"
 echo "KASM_RENDERD: ${KASM_RENDERD:-not set}"
 
@@ -37,18 +43,21 @@ else
     echo "glxinfo not available"
 fi
 
+# The NVIDIA GL/EGL selection variables are scoped to vglrun-wrapper.sh rather
+# than the image environment (see the Dockerfile), so drive the tests through
+# the wrapper to exercise the same environment a GPU app actually gets.
 echo -e "\n--- VirtualGL Test (EGL backend) ---"
 if command -v vglrun &> /dev/null; then
-    echo "Testing: VGL_DISPLAY=egl vglrun glxinfo"
-    VGL_DISPLAY=egl vglrun glxinfo -B 2>/dev/null | grep -E "vendor|renderer|version|direct rendering"
+    echo "Testing: vglrun-wrapper.sh glxinfo"
+    /usr/local/bin/vglrun-wrapper.sh glxinfo -B 2>/dev/null | grep -E "vendor|renderer|version|direct rendering"
 else
     echo "VirtualGL (vglrun) not found in PATH"
 fi
 
 echo -e "\n--- Quick Benchmark Test ---"
 if command -v glmark2 &> /dev/null && command -v vglrun &> /dev/null; then
-    echo "Running: VGL_DISPLAY=egl vglrun glmark2 (first 3 tests)..."
-    timeout 30 bash -c 'VGL_DISPLAY=egl vglrun glmark2 2>&1 | head -20'
+    echo "Running: vglrun-wrapper.sh glmark2 (first 3 tests)..."
+    timeout 30 bash -c '/usr/local/bin/vglrun-wrapper.sh glmark2 2>&1 | head -20'
 fi
 
 echo -e "\n=========================================="
