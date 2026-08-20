@@ -1,5 +1,8 @@
 FROM kasmweb/ubuntu-noble-nvidia-pytorch:1.18.0-rolling-daily
 
+# Default timezone for the UNM deployment
+ENV TZ=America/Denver
+
 # =============================================================================
 # NVIDIA GPU Configuration
 # =============================================================================
@@ -151,7 +154,13 @@ ENV PATH=$PATH:/usr/local/go/bin
 WORKDIR /home/kasm-user/data-store
 
 RUN mkdir -p /home/kasm-user/.irods && \
-    echo '{"irods_host": "data.cyverse.org", "irods_port": 1247, "irods_user_name": "$IPLANT_USER", "irods_zone_name": "iplant"}' | envsubst > /home/kasm-user/.irods/irods_environment.json
+    echo '{"irods_host": "swcacti1.unm.edu", "irods_port": 1247, "irods_user_name": "$IPLANT_USER", "irods_zone_name": "swcactiZone"}' | envsubst > /home/kasm-user/.irods/irods_environment.json
+
+# ~/scratch for temporary storage that isn't backed by the data store.
+# Explicit chown because this runs under `USER root` (set earlier for the GPU
+# package installs), unlike the non-GPU image where the equivalent mkdir runs
+# before that Dockerfile's own USER root switch and inherits kasm-user for free.
+RUN mkdir -p /home/kasm-user/scratch && chown kasm-user:kasm-user /home/kasm-user/scratch
 
 # Install GoCommands for CyVerse data management
 RUN cd /usr/local/bin/ && \
@@ -192,17 +201,17 @@ RUN chmod +x /dockerstartup/vnc_startup.sh /dockerstartup/dri-node-setup.sh
 # copy and keep it only if it still parses; otherwise restore the original and
 # accept the cosmetic pyenv warning.
 RUN for f in /etc/bash.bashrc /etc/profile /etc/profile.d/*.sh \
-             /home/kasm-user/.bashrc /home/kasm-user/.bash_profile \
-             /home/kasm-user/.profile; do \
-        [ -f "$f" ] || continue; \
-        grep -q pyenv "$f" || continue; \
-        sed '/pyenv/d' "$f" > "$f.nopyenv"; \
-        if bash -n "$f.nopyenv"; then \
-            cat "$f.nopyenv" > "$f"; \
-        else \
-            echo "WARNING: $f left unchanged; pyenv removal would not parse"; \
-        fi; \
-        rm -f "$f.nopyenv"; \
+    /home/kasm-user/.bashrc /home/kasm-user/.bash_profile \
+    /home/kasm-user/.profile; do \
+    [ -f "$f" ] || continue; \
+    grep -q pyenv "$f" || continue; \
+    sed '/pyenv/d' "$f" > "$f.nopyenv"; \
+    if bash -n "$f.nopyenv"; then \
+    cat "$f.nopyenv" > "$f"; \
+    else \
+    echo "WARNING: $f left unchanged; pyenv removal would not parse"; \
+    fi; \
+    rm -f "$f.nopyenv"; \
     done
 
 # The strip above is a build-time edit, and the base image undoes it at runtime:
@@ -218,11 +227,11 @@ RUN for f in /etc/bash.bashrc /etc/profile /etc/profile.d/*.sh \
 # overrides ENTRYPOINT to skip that. If that is ever restored, the real pyenv
 # takes over here automatically.
 RUN printf '%s\n' \
-        '#!/bin/sh' \
-        '# No-op stand-in; see the Dockerfile for why. Defers to a real pyenv.' \
-        '[ -x "$HOME/.pyenv/bin/pyenv" ] && exec "$HOME/.pyenv/bin/pyenv" "$@"' \
-        'exit 0' \
-        > /usr/local/bin/pyenv && \
+    '#!/bin/sh' \
+    '# No-op stand-in; see the Dockerfile for why. Defers to a real pyenv.' \
+    '[ -x "$HOME/.pyenv/bin/pyenv" ] && exec "$HOME/.pyenv/bin/pyenv" "$@"' \
+    'exit 0' \
+    > /usr/local/bin/pyenv && \
     chmod +x /usr/local/bin/pyenv
 
 # Create cache directory for conda with proper ownership
@@ -283,4 +292,9 @@ RUN /home/kasm-user/miniconda3/bin/conda --no-plugins install -y --solver=classi
 # =============================================================================
 # Container Startup
 # =============================================================================
+# Default working directory is the home directory. The data-store WORKDIR
+# above only needs to exist for the CSI driver's mount path (set separately
+# in the DE/K8s config), not to be where the session actually lands.
+WORKDIR /home/kasm-user
+
 ENTRYPOINT [ "/dockerstartup/vnc_startup.sh" ]

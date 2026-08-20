@@ -319,6 +319,62 @@ function custom_startup (){
     fi
 }
 
+# Optional user init hook, run once and to completion before the desktop
+# starts. Unlike custom_startup() above (a script baked into the image), this
+# one is supplied by the user at launch time. The DE's "User init script" app
+# parameter reaches us as `--init-script <basename>`, so that parameter's
+# "Argument option" field must be set to --init-script in the DE; leave it
+# empty and only the bare value is passed, which this also accepts since
+# vnc_startup.sh declares no CMD, so argv is empty unless the DE supplied a
+# parameter. VICE_INIT_SCRIPT does the same for testing outside the DE.
+# A hook is capped at a flat two minutes, deliberately not configurable: the
+# cap protects startup, and a knob to raise it would just be a knob to defeat it.
+function run_user_init_hook (){
+    local init_log="$HOME/.vice-init.log"
+    local init_script="${VICE_INIT_SCRIPT:-}"
+    local hook status
+
+    echo "vnc_startup.sh args: $*" >> "$init_log"
+
+    # Shift one at a time. `shift 2` is a trap here: a parameter left blank in
+    # the DE arrives as a bare trailing --init-script, and shifting past the
+    # end is a no-op that spins forever.
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --init-script) init_script="${2:-}" ;;
+            -h|--help|-w|--wait|-s|--skip|-d|--debug) ;;
+            *) [ -n "$init_script" ] || init_script="$1" ;;
+        esac
+        shift
+    done
+
+    [ -n "$init_script" ] || return 0
+
+    # Whichever file the user selects, the CSI driver stages it at this fixed
+    # path for the launch -- regardless of which directory in the data store
+    # it was picked from -- so it's the sole source of truth; nothing here
+    # searches elsewhere for a name match. `basename` also strips any
+    # directory components from $init_script, so the constructed path can
+    # never land outside this one staged directory.
+    hook="$HOME/data-store/data/input/$(basename "$init_script")"
+    if [ ! -f "$hook" ] || [ ! -r "$hook" ]; then
+        echo "init hook: no script staged at $hook" >> "$init_log"
+        return 0
+    fi
+
+    echo "Running user init hook: $hook (log $init_log)"
+    # `bash "$hook"` rather than `"$hook"`: the executable bit does not
+    # survive the data store. A child process rather than `source`: a sourced
+    # hook could clobber this script.
+    timeout --kill-after=10 120 bash "$hook" >> "$init_log" 2>&1
+    status=$?
+    case "$status" in
+        0) ;;
+        124|137) echo "init hook: timed out after 120s and was killed, continuing with defaults" | tee -a "$init_log" ;;
+        *) echo "init hook: exited $status, continuing with defaults" | tee -a "$init_log" ;;
+    esac
+}
+
 ############ END FUNCTION DECLARATIONS ###########
 
 if [[ $1 =~ -h|--help ]]; then
@@ -329,10 +385,25 @@ fi
 # Syncronize user-space loaded persistent profiles
 pull_profile
 
+# Land the whole startup process -- and so the desktop session and every
+# terminal launched from it -- in $HOME, regardless of the container's actual
+# working directory. That has to stay at data-store: the DE mounts the
+# analysis's persistent volume at the container's working directory, so
+# pointing it at $HOME would mount a volume over the home directory and hide
+# .bashrc and everything else this image installs. The DE/K8s pod spec can
+# (and does) override the image's own WORKDIR, so this is the only place that
+# reliably lands the session in ~ either way.
+cd "$HOME" || true
+
 # should also source $STARTUPDIR/generate_container_user
 if [ -f $HOME/.bashrc ]; then
     source $HOME/.bashrc
 fi
+
+# Run the optional user init hook now: profile restore and .bashrc are done,
+# so the hook has a fully set up environment, and it runs before the desktop
+# starts so it can prepare the session (e.g. clone a repo, install a package).
+run_user_init_hook "$@"
 
 if [[ ${KASM_DEBUG:-0} == 1 ]]; then
     echo -e "\n\n------------------ DEBUG KASM STARTUP -----------------"

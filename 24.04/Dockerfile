@@ -1,11 +1,17 @@
 FROM kasmweb/ubuntu-noble-desktop:1.18.0-rolling-daily
 
+# Default timezone for the UNM deployment
+ENV TZ=America/Denver
+
 # create ~/data-store for CSI driver fuse mount
 WORKDIR /home/kasm-user/data-store
 
 # Install GoCommands
 RUN mkdir /home/kasm-user/.irods
-RUN echo '{"irods_host": "data.cyverse.org", "irods_port": 1247, "irods_user_name": "$IPLANT_USER", "irods_zone_name": "iplant"}' | envsubst > /home/kasm-user/.irods/irods_environment.json
+RUN echo '{"irods_host": "swcacti1.unm.edu", "irods_port": 1247, "irods_user_name": "$IPLANT_USER", "irods_zone_name": "swcactiZone"}' | envsubst > /home/kasm-user/.irods/irods_environment.json
+
+# ~/scratch for temporary storage that isn't backed by the data store
+RUN mkdir -p /home/kasm-user/scratch && chown kasm-user:kasm-user /home/kasm-user/scratch
 
 USER root
 
@@ -91,5 +97,10 @@ ENV PATH="/home/kasm-user/miniconda3/bin:${PATH}"
 # Install mamba using conda (use classic solver with no-plugins flag)
 RUN /home/kasm-user/miniconda3/bin/conda --no-plugins install -y --solver=classic -c conda-forge mamba && \
     /home/kasm-user/miniconda3/bin/conda clean -afy
+
+# Default working directory is the home directory. The data-store WORKDIR
+# above only needs to exist for the CSI driver's mount path (set separately
+# in the DE/K8s config), not to be where the session actually lands.
+WORKDIR /home/kasm-user
 
 ENTRYPOINT [ "/dockerstartup/vnc_startup.sh" ]
