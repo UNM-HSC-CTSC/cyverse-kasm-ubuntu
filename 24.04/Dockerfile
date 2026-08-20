@@ -11,7 +11,7 @@ RUN mkdir /home/kasm-user/.irods
 RUN echo '{"irods_host": "swcacti1.unm.edu", "irods_port": 1247, "irods_user_name": "$IPLANT_USER", "irods_zone_name": "swcactiZone"}' | envsubst > /home/kasm-user/.irods/irods_environment.json
 
 # ~/scratch for temporary storage that isn't backed by the data store
-RUN mkdir -p /home/kasm-user/scratch
+RUN mkdir -p /home/kasm-user/scratch && chown kasm-user:kasm-user /home/kasm-user/scratch
 
 USER root
 

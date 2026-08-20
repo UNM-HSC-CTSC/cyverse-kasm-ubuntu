@@ -385,6 +385,16 @@ fi
 # Syncronize user-space loaded persistent profiles
 pull_profile
 
+# Land the whole startup process -- and so the desktop session and every
+# terminal launched from it -- in $HOME, regardless of the container's actual
+# working directory. That has to stay at data-store: the DE mounts the
+# analysis's persistent volume at the container's working directory, so
+# pointing it at $HOME would mount a volume over the home directory and hide
+# .bashrc and everything else this image installs. The DE/K8s pod spec can
+# (and does) override the image's own WORKDIR, so this is the only place that
+# reliably lands the session in ~ either way.
+cd "$HOME" || true
+
 # should also source $STARTUPDIR/generate_container_user
 if [ -f $HOME/.bashrc ]; then
     source $HOME/.bashrc

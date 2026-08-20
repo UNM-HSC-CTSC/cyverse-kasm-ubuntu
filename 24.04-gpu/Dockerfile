@@ -156,8 +156,11 @@ WORKDIR /home/kasm-user/data-store
 RUN mkdir -p /home/kasm-user/.irods && \
     echo '{"irods_host": "swcacti1.unm.edu", "irods_port": 1247, "irods_user_name": "$IPLANT_USER", "irods_zone_name": "swcactiZone"}' | envsubst > /home/kasm-user/.irods/irods_environment.json
 
-# ~/scratch for temporary storage that isn't backed by the data store
-RUN mkdir -p /home/kasm-user/scratch
+# ~/scratch for temporary storage that isn't backed by the data store.
+# Explicit chown because this runs under `USER root` (set earlier for the GPU
+# package installs), unlike the non-GPU image where the equivalent mkdir runs
+# before that Dockerfile's own USER root switch and inherits kasm-user for free.
+RUN mkdir -p /home/kasm-user/scratch && chown kasm-user:kasm-user /home/kasm-user/scratch
 
 # Install GoCommands for CyVerse data management
 RUN cd /usr/local/bin/ && \
