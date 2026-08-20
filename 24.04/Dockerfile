@@ -7,8 +7,10 @@ ENV TZ=America/Denver
 WORKDIR /home/kasm-user/data-store
 
 # Install GoCommands
+# irods_environment.json itself is written at container start by
+# vnc_startup.sh, not here: $IPLANT_USER doesn't exist at build time, so
+# baking it in now would always envsubst it to an empty string.
 RUN mkdir /home/kasm-user/.irods
-RUN echo '{"irods_host": "swcacti1.unm.edu", "irods_port": 1247, "irods_user_name": "$IPLANT_USER", "irods_zone_name": "swcactiZone"}' | envsubst > /home/kasm-user/.irods/irods_environment.json
 
 # ~/scratch for temporary storage that isn't backed by the data store
 RUN mkdir -p /home/kasm-user/scratch && chown kasm-user:kasm-user /home/kasm-user/scratch

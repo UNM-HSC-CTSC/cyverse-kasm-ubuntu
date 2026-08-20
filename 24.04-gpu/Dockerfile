@@ -153,8 +153,10 @@ ENV PATH=$PATH:/usr/local/go/bin
 # Configure data-store directory for CSI driver mounts and install GoCommands
 WORKDIR /home/kasm-user/data-store
 
-RUN mkdir -p /home/kasm-user/.irods && \
-    echo '{"irods_host": "swcacti1.unm.edu", "irods_port": 1247, "irods_user_name": "$IPLANT_USER", "irods_zone_name": "swcactiZone"}' | envsubst > /home/kasm-user/.irods/irods_environment.json
+# irods_environment.json itself is written at container start by
+# vnc_startup.sh, not here: $IPLANT_USER doesn't exist at build time, so
+# baking it in now would always envsubst it to an empty string.
+RUN mkdir -p /home/kasm-user/.irods
 
 # ~/scratch for temporary storage that isn't backed by the data store.
 # Explicit chown because this runs under `USER root` (set earlier for the GPU

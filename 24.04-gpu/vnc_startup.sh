@@ -397,6 +397,14 @@ fi
 # Syncronize user-space loaded persistent profiles
 pull_profile
 
+# Write the iRODS config with the real, running $IPLANT_USER. This can't be
+# done at build time (in the Dockerfile) because $IPLANT_USER doesn't exist
+# during `docker build` -- envsubst would just substitute it with an empty
+# string, permanently, regardless of what any runtime shell sees later. Runs
+# after pull_profile so a restored profile can't leave a stale/empty file here.
+mkdir -p "$HOME/.irods"
+echo '{"irods_host": "swcacti1.unm.edu", "irods_port": 1247, "irods_user_name": "$IPLANT_USER", "irods_zone_name": "swcactiZone"}' | envsubst > "$HOME/.irods/irods_environment.json"
+
 # Land the whole startup process -- and so the desktop session and every
 # terminal launched from it -- in $HOME, regardless of the container's actual
 # working directory. That has to stay at data-store: the DE mounts the
