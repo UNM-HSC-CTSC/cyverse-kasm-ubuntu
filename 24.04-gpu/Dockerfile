@@ -158,11 +158,8 @@ WORKDIR /home/kasm-user/data-store
 # baking it in now would always envsubst it to an empty string.
 RUN mkdir -p /home/kasm-user/.irods
 
-# ~/scratch for temporary storage that isn't backed by the data store.
-# Explicit chown because this runs under `USER root` (set earlier for the GPU
-# package installs), unlike the non-GPU image where the equivalent mkdir runs
-# before that Dockerfile's own USER root switch and inherits kasm-user for free.
-RUN mkdir -p /home/kasm-user/scratch && chown kasm-user:kasm-user /home/kasm-user/scratch
+# ~/scratch for temporary storage that isn't backed by the data store
+RUN mkdir -p /home/kasm-user/scratch
 
 # Install GoCommands for CyVerse data management
 RUN cd /usr/local/bin/ && \
@@ -236,8 +233,8 @@ RUN printf '%s\n' \
     > /usr/local/bin/pyenv && \
     chmod +x /usr/local/bin/pyenv
 
-# Create cache directory for conda with proper ownership
-RUN mkdir -p /home/kasm-user/.cache && chown -R kasm-user:kasm-user /home/kasm-user/.cache
+# Create cache directory for conda
+RUN mkdir -p /home/kasm-user/.cache
 
 # Stop VS Code prompting "Choose password for new keyring" on first launch.
 #
@@ -252,8 +249,15 @@ RUN mkdir -p /home/kasm-user/.cache && chown -R kasm-user:kasm-user /home/kasm-u
 # argv.json is VS Code's documented runtime-argument file and stays editable, so
 # a user who wants the keyring can revert it.
 RUN mkdir -p /home/kasm-user/.vscode && \
-    printf '{\n  "password-store": "basic"\n}\n' > /home/kasm-user/.vscode/argv.json && \
-    chown -R kasm-user:kasm-user /home/kasm-user/.vscode
+    printf '{\n  "password-store": "basic"\n}\n' > /home/kasm-user/.vscode/argv.json
+
+# Everything under $HOME needs to be owned by kasm-user before vnc_startup.sh
+# runs as kasm-user, or any write there (e.g. the runtime iRODS config) fails
+# with "Permission denied". Piecemeal per-directory chowns are how that keeps
+# getting missed for whichever directory got created last while still root
+# (this bit us for /home/kasm-user/.irods), so do it once, broadly, right
+# before switching away from root instead.
+RUN chown -R kasm-user:kasm-user /home/kasm-user
 
 # =============================================================================
 # Switch to kasm-user for User-Space Installations

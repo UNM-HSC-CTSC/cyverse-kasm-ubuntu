@@ -402,8 +402,14 @@ pull_profile
 # during `docker build` -- envsubst would just substitute it with an empty
 # string, permanently, regardless of what any runtime shell sees later. Runs
 # after pull_profile so a restored profile can't leave a stale/empty file here.
-mkdir -p "$HOME/.irods"
-echo '{"irods_host": "swcacti1.unm.edu", "irods_port": 1247, "irods_user_name": "$IPLANT_USER", "irods_zone_name": "swcactiZone"}' | envsubst > "$HOME/.irods/irods_environment.json"
+# Best-effort and never fatal: this whole script runs under `set -e`, and a
+# desktop with broken iRODS config is recoverable, but one that never starts
+# at all (because this step tripped set -e on some pod-specific quirk in
+# $HOME or envsubst's availability) is not.
+mkdir -p "$HOME/.irods" 2>/dev/null || echo "warning: could not create $HOME/.irods" >&2
+echo '{"irods_host": "swcacti1.unm.edu", "irods_port": 1247, "irods_user_name": "$IPLANT_USER", "irods_zone_name": "swcactiZone"}' \
+    | envsubst > "$HOME/.irods/irods_environment.json" 2>/dev/null \
+    || echo "warning: could not write $HOME/.irods/irods_environment.json" >&2
 
 # Land the whole startup process -- and so the desktop session and every
 # terminal launched from it -- in $HOME, regardless of the container's actual

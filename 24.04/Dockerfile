@@ -13,7 +13,7 @@ WORKDIR /home/kasm-user/data-store
 RUN mkdir /home/kasm-user/.irods
 
 # ~/scratch for temporary storage that isn't backed by the data store
-RUN mkdir -p /home/kasm-user/scratch && chown kasm-user:kasm-user /home/kasm-user/scratch
+RUN mkdir -p /home/kasm-user/scratch
 
 USER root
 
@@ -69,8 +69,16 @@ COPY vnc_startup.sh /dockerstartup/vnc_startup.sh
 
 RUN chmod +x /dockerstartup/vnc_startup.sh
 
-# Create cache directory for conda with proper ownership
-RUN mkdir -p /home/kasm-user/.cache && chown -R kasm-user:kasm-user /home/kasm-user/.cache
+# Create cache directory for conda
+RUN mkdir -p /home/kasm-user/.cache
+
+# Everything under $HOME needs to be owned by kasm-user before vnc_startup.sh
+# runs as kasm-user, or any write there (e.g. the runtime iRODS config) fails
+# with "Permission denied". Piecemeal per-directory chowns are how that keeps
+# getting missed for whichever directory got created last while still root
+# (this bit us for /home/kasm-user/.irods in the GPU image), so do it once,
+# broadly, right before switching away from root instead.
+RUN chown -R kasm-user:kasm-user /home/kasm-user
 
 USER kasm-user
 
