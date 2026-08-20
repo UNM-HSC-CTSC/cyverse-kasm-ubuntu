@@ -414,11 +414,6 @@ if [ -f $HOME/.bashrc ]; then
     source $HOME/.bashrc
 fi
 
-# Run the optional user init hook now: profile restore and .bashrc are done,
-# so the hook has a fully set up environment, and it runs before the desktop
-# starts so it can prepare the session (e.g. clone a repo, install a package).
-run_user_init_hook "$@"
-
 if [[ ${KASM_DEBUG:-0} == 1 ]]; then
     echo -e "\n\n------------------ DEBUG KASM STARTUP -----------------"
     export DEBUG=true
@@ -475,6 +470,18 @@ echo "Kasm User ${KASM_USER}(${KASM_USER_ID}) started container id ${HOSTNAME} w
 
 # start custom startup script
 custom_startup
+
+# Run the optional user init hook now that the desktop is up and the
+# container has satisfied readiness (port 6901 is bound). Running it earlier
+# -- before start_kasmvnc -- delayed Xvnc past whatever startup deadline the
+# DE/K8s imposes on this container: a slow or hung user script (which our own
+# 120s+10s timeout is designed to tolerate) got the whole pod killed and
+# restarted by Kubernetes before that timeout ever had a chance to fire, and
+# since the same broken script gets retried on every fresh restart, it looped
+# forever from the outside even though the timeout logic is correct in
+# isolation. Backgrounded so a slow hook can't delay the desktop becoming
+# interactive either.
+run_user_init_hook "$@" &
 
 # Monitor Kasm Services
 sleep 3
