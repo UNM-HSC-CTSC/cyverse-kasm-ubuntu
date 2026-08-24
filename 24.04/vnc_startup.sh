@@ -427,6 +427,22 @@ if [ -f $HOME/.bashrc ]; then
     source $HOME/.bashrc
 fi
 
+# Run the optional user init hook now: profile restore and .bashrc are done,
+# so the hook has a fully set up environment, and it runs before the desktop
+# starts so it can prepare the session (e.g. clone a repo, install a package).
+# EXPERIMENT: this hook used to live here, before start_kasmvnc, until a
+# reordering commit moved it to after start_kasmvnc, on the theory that a
+# slow/hung hook here delayed Xvnc past an external DE/K8s startup deadline
+# and got the pod killed before our own 120s+10s timeout could fire. That
+# theory was never actually confirmed against pod events, and the crash loop
+# it was meant to explain is now known to reproduce from a completely
+# different, unrelated cause: run_user_init_hook()'s own `set -e` bug (fixed
+# above), which kills this script itself ~130s in, independent of where the
+# call sits. Moving the call back here to test whether the crash loop is
+# fully gone now that the real bug is fixed, i.e. whether the "external
+# deadline" theory was a misdiagnosis of the same set -e bug all along.
+run_user_init_hook "$@"
+
 if [[ ${KASM_DEBUG:-0} == 1 ]]; then
     echo -e "\n\n------------------ DEBUG KASM STARTUP -----------------"
     export DEBUG=true
@@ -459,20 +475,6 @@ chmod 600 $PASSWD_PATH
 
 # start processes
 start_kasmvnc
-
-# Run the optional user init hook now that Xvnc/websockify are already bound
-# to port 6901 (readiness is satisfied), but before start_window_manager, so
-# nothing usable is on screen yet. Running it earlier -- before
-# start_kasmvnc -- delayed Xvnc past whatever startup deadline the DE/K8s
-# imposes on this container: a slow or hung user script (which our own
-# 120s+10s timeout is designed to tolerate) got the whole pod killed and
-# restarted by Kubernetes before that timeout ever had a chance to fire, and
-# since the same broken script gets retried on every fresh restart, it looped
-# forever from the outside even though the timeout logic is correct in
-# isolation. Deliberately not backgrounded: the desktop should be fully ready
-# by the time the user can see anything, not still running a script
-# concurrently with an already-usable session.
-run_user_init_hook "$@"
 
 start_window_manager
 start_audio_out_websocket
