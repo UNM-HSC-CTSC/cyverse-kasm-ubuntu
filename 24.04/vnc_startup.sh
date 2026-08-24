@@ -366,8 +366,21 @@ function run_user_init_hook (){
     # `bash "$hook"` rather than `"$hook"`: the executable bit does not
     # survive the data store. A child process rather than `source`: a sourced
     # hook could clobber this script.
-    timeout --kill-after=10 120 bash "$hook" >> "$init_log" 2>&1
-    status=$?
+    # The `if` wrapper is load-bearing, not style: this script runs under
+    # `set -e` without `set -o errtrace`, so a bare `timeout ...; status=$?`
+    # here would let `set -e` kill the whole script (and thus the container)
+    # the instant the hook times out or exits non-zero -- before `status=$?`
+    # ever ran, silently skipping the "continue with defaults" handling below.
+    # Kubernetes then restarts the container and the same script fails the
+    # same way again: an unrecoverable crash loop for any hook that times out
+    # or errors, rather than the graceful fallback this function intends. An
+    # `if` condition is one of the contexts `set -e` exempts, so this captures
+    # the real exit status without tripping it.
+    if timeout --kill-after=10 120 bash "$hook" >> "$init_log" 2>&1; then
+        status=0
+    else
+        status=$?
+    fi
     case "$status" in
         0) ;;
         124|137) echo "init hook: timed out after 120s and was killed, continuing with defaults" | tee -a "$init_log" ;;
