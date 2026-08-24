@@ -378,8 +378,21 @@ function run_user_init_hook (){
     # `bash "$hook"` rather than `"$hook"`: the executable bit does not
     # survive the data store. A child process rather than `source`: a sourced
     # hook could clobber this script.
-    timeout --kill-after=10 120 bash "$hook" >> "$init_log" 2>&1
-    status=$?
+    # The `if` wrapper is load-bearing, not style: this script runs under
+    # `set -e` without `set -o errtrace`, so a bare `timeout ...; status=$?`
+    # here would let `set -e` kill the whole script (and thus the container)
+    # the instant the hook times out or exits non-zero -- before `status=$?`
+    # ever ran, silently skipping the "continue with defaults" handling below.
+    # Kubernetes then restarts the container and the same script fails the
+    # same way again: an unrecoverable crash loop for any hook that times out
+    # or errors, rather than the graceful fallback this function intends. An
+    # `if` condition is one of the contexts `set -e` exempts, so this captures
+    # the real exit status without tripping it.
+    if timeout --kill-after=10 120 bash "$hook" >> "$init_log" 2>&1; then
+        status=0
+    else
+        status=$?
+    fi
     case "$status" in
         0) ;;
         124|137) echo "init hook: timed out after 120s and was killed, continuing with defaults" | tee -a "$init_log" ;;
@@ -426,11 +439,6 @@ if [ -f $HOME/.bashrc ]; then
     source $HOME/.bashrc
 fi
 
-# Run the optional user init hook now: profile restore and .bashrc are done,
-# so the hook has a fully set up environment, and it runs before the desktop
-# starts so it can prepare the session (e.g. clone a repo, install a package).
-run_user_init_hook "$@"
-
 if [[ ${KASM_DEBUG:-0} == 1 ]]; then
     echo -e "\n\n------------------ DEBUG KASM STARTUP -----------------"
     export DEBUG=true
@@ -463,6 +471,20 @@ chmod 600 $PASSWD_PATH
 
 # start processes
 start_kasmvnc
+
+# Run the optional user init hook now that Xvnc/websockify are already bound
+# to port 6901 (readiness is satisfied), but before start_window_manager, so
+# nothing usable is on screen yet. Running it earlier -- before
+# start_kasmvnc -- delayed Xvnc past whatever startup deadline the DE/K8s
+# imposes on this container: a slow or hung user script (which our own
+# 120s+10s timeout is designed to tolerate) got the whole pod killed and
+# restarted by Kubernetes before that timeout ever had a chance to fire, and
+# since the same broken script gets retried on every fresh restart, it looped
+# forever from the outside even though the timeout logic is correct in
+# isolation. Deliberately not backgrounded: the desktop should be fully ready
+# by the time the user can see anything, not still running a script
+# concurrently with an already-usable session.
+run_user_init_hook "$@"
 
 # GUI apps on this desktop can only render through Mesa's software rasteriser.
 # Xvnc is not an NVIDIA X server, and Mesa has no userspace driver for the
