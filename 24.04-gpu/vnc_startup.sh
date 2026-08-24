@@ -439,20 +439,7 @@ if [ -f $HOME/.bashrc ]; then
     source $HOME/.bashrc
 fi
 
-# Run the optional user init hook now: profile restore and .bashrc are done,
-# so the hook has a fully set up environment, and it runs before the desktop
-# starts so it can prepare the session (e.g. clone a repo, install a package).
-# EXPERIMENT: this hook used to live here, before start_kasmvnc, until a
-# reordering commit moved it to after start_kasmvnc, on the theory that a
-# slow/hung hook here delayed Xvnc past an external DE/K8s startup deadline
-# and got the pod killed before our own 120s+10s timeout could fire. That
-# theory was never actually confirmed against pod events, and the crash loop
-# it was meant to explain is now known to reproduce from a completely
-# different, unrelated cause: run_user_init_hook()'s own `set -e` bug (fixed
-# above), which kills this script itself ~130s in, independent of where the
-# call sits. Moving the call back here to test whether the crash loop is
-# fully gone now that the real bug is fixed, i.e. whether the "external
-# deadline" theory was a misdiagnosis of the same set -e bug all along.
+# Run the optional user init hook now
 run_user_init_hook "$@"
 
 if [[ ${KASM_DEBUG:-0} == 1 ]]; then
