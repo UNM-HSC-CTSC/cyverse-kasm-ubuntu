@@ -427,6 +427,9 @@ if [ -f $HOME/.bashrc ]; then
     source $HOME/.bashrc
 fi
 
+# Run the optional user init hook now
+run_user_init_hook "$@"
+
 if [[ ${KASM_DEBUG:-0} == 1 ]]; then
     echo -e "\n\n------------------ DEBUG KASM STARTUP -----------------"
     export DEBUG=true
@@ -459,20 +462,6 @@ chmod 600 $PASSWD_PATH
 
 # start processes
 start_kasmvnc
-
-# Run the optional user init hook now that Xvnc/websockify are already bound
-# to port 6901 (readiness is satisfied), but before start_window_manager, so
-# nothing usable is on screen yet. Running it earlier -- before
-# start_kasmvnc -- delayed Xvnc past whatever startup deadline the DE/K8s
-# imposes on this container: a slow or hung user script (which our own
-# 120s+10s timeout is designed to tolerate) got the whole pod killed and
-# restarted by Kubernetes before that timeout ever had a chance to fire, and
-# since the same broken script gets retried on every fresh restart, it looped
-# forever from the outside even though the timeout logic is correct in
-# isolation. Deliberately not backgrounded: the desktop should be fully ready
-# by the time the user can see anything, not still running a script
-# concurrently with an already-usable session.
-run_user_init_hook "$@"
 
 start_window_manager
 start_audio_out_websocket
