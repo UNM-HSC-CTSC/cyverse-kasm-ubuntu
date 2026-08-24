@@ -108,6 +108,10 @@ ENV PATH="/home/kasm-user/miniconda3/bin:${PATH}"
 RUN /home/kasm-user/miniconda3/bin/conda --no-plugins install -y --solver=classic -c conda-forge mamba && \
     /home/kasm-user/miniconda3/bin/conda clean -afy
 
+# Accept conda tos for trusted channels
+RUN /home/kasm-user/miniconda3/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main \
+    && /home/kasm-user/miniconda3/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
+
 # Default working directory is the home directory. The data-store WORKDIR
 # above only needs to exist for the CSI driver's mount path (set separately
 # in the DE/K8s config), not to be where the session actually lands.
