@@ -295,6 +295,10 @@ ENV PATH="/home/kasm-user/miniconda3/bin:${PATH}"
 RUN /home/kasm-user/miniconda3/bin/conda --no-plugins install -y --solver=classic -c conda-forge mamba && \
     /home/kasm-user/miniconda3/bin/conda clean -afy
 
+# Accept conda tos for trusted channels
+RUN /home/kasm-user/miniconda3/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main \
+    && /home/kasm-user/miniconda3/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
+
 # =============================================================================
 # Container Startup
 # =============================================================================
