@@ -9,7 +9,7 @@
 # longer reachable as a fallback and GUI apps break outright. Scoped to this
 # wrapper, they only affect a process that explicitly asked for the GPU.
 
-APP="$@"
+APP=("$@")
 
 # Find vglrun location (check common paths)
 if command -v vglrun &>/dev/null; then
@@ -30,8 +30,8 @@ if [ -n "$VGLRUN" ] && [ -d "/dev/dri" ]; then
              VGL_DISPLAY=egl \
              __GLX_VENDOR_LIBRARY_NAME=nvidia \
              __EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/10_nvidia.json \
-             "$VGLRUN" $APP
+             "$VGLRUN" "${APP[@]}"
 else
     echo "Starting without GPU acceleration (software rendering)"
-    exec $APP
+    exec "${APP[@]}"
 fi

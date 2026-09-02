@@ -140,6 +140,21 @@ COPY vglrun-wrapper.sh /usr/local/bin/vglrun-wrapper.sh
 COPY verify-gpu.sh /usr/local/bin/verify-gpu.sh
 RUN chmod +x /usr/local/bin/vglrun-wrapper.sh /usr/local/bin/verify-gpu.sh
 
+# Shadow the base image's `code` (/usr/share/code/bin/code, resolved via the
+# /bin/code symlink) with a wrapper that launches it through vglrun-wrapper.sh
+# with the GL flags this Chromium build actually needs for hardware-accelerated
+# WebGL -- see code-wrapper.sh for why. /usr/local/bin precedes /bin in
+# kasm-user's PATH, the same shadowing trick already used below for pyenv.
+COPY code-wrapper.sh /usr/local/bin/code
+RUN chmod +x /usr/local/bin/code
+
+# The desktop/taskbar launcher entries call /usr/share/code/code directly,
+# bypassing PATH (and so the code-wrapper.sh shadow above) entirely. Repoint
+# them at the wrapper so icon launches get GPU acceleration too, not just a
+# `code` typed in a terminal.
+RUN sed -i 's|/usr/share/code/code|/usr/local/bin/code|g' \
+    /usr/share/applications/code.desktop /usr/share/applications/code-url-handler.desktop
+
 # =============================================================================
 # Go Language Installation
 # =============================================================================
